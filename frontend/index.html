@@ -1,0 +1,82 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plant Disease Detector</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="logo">🌿 PlantAI</div>
+    <p class="tagline">Upload a plant leaf photo to detect disease instantly</p>
+  </header>
+
+  <main>
+    <!-- Upload area -->
+    <div class="upload-card" id="upload-area">
+      <div class="upload-icon">📷</div>
+      <p class="upload-title">Drop your plant image here</p>
+      <p class="upload-sub">or click to browse</p>
+      <input type="file" id="file-input" accept="image/*" hidden>
+      <button class="btn-primary" onclick="document.getElementById('file-input').click()">Choose Image</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-section" id="preview-section" style="display:none">
+      <img id="preview-img" alt="Plant image preview">
+      <div class="btn-row">
+        <button class="btn-secondary" onclick="resetApp()">Choose Another</button>
+        <button class="btn-primary" id="analyze-btn" onclick="analyzeImage()">Analyze Plant</button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading" id="loading" style="display:none">
+      <div class="spinner"></div>
+      <p>Analyzing your plant...</p>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="error-box" style="display:none"></div>
+
+    <!-- Results -->
+    <div class="result-card" id="result-card" style="display:none">
+      <div class="result-header" id="result-header">
+        <div>
+          <h2 id="result-disease"></h2>
+          <p id="result-plant"></p>
+        </div>
+        <div class="confidence-badge" id="confidence-badge"></div>
+      </div>
+
+      <div class="result-body">
+        <div class="info-row">
+          <span class="label">Status</span>
+          <span class="status-tag" id="status-tag"></span>
+        </div>
+
+        <div class="info-row">
+          <span class="label">Treatment</span>
+          <p id="result-treatment"></p>
+        </div>
+
+        <div class="top3-section">
+          <p class="label">Top predictions</p>
+          <div id="top3-list"></div>
+        </div>
+      </div>
+
+      <button class="btn-secondary full-width" onclick="resetApp()">Analyze Another Plant</button>
+    </div>
+  </main>
+
+  <footer>
+    <p>Built for final year project · Powered by MobileNetV2 + TensorFlow</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

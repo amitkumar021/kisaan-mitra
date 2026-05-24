@@ -1,0 +1,22 @@
+cat > .gitignore << 'EOF'
+# Virtual environment
+venv/
+
+# Model files (too large for GitHub)
+model/plant_model.h5
+model/plant_model_*.h5
+model/training_graph.png
+
+# Dataset
+*.zip
+plant_data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+EOF
