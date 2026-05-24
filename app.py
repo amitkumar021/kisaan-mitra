@@ -2,39 +2,50 @@
 
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_cors import CORS
-import tensorflow as tf
 import numpy as np
 from PIL import Image
 import json, io, os
 import traceback
 
 app = Flask(__name__, template_folder='.', static_folder='.')
-CORS(app)   # allows your HTML frontend to call this API
+CORS(app)
 
-# ── Load model at startup ──────────────────────────
-MODEL_PATH      = "model/plant_model.h5"
-CLASS_NAMES_PATH = "model/class_names.json"
+# ── Mock Model for Testing ──────────────────────────
+# Replace this with your actual model loading later
 
-# Check if model files exist
-if not os.path.exists(MODEL_PATH):
-    print(f"⚠️  Model file not found at {MODEL_PATH}")
-    model = None
-else:
-    print("Loading model...")
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("✓ Model loaded successfully")
+DISEASE_CLASSES = [
+    "Apple___Apple_scab",
+    "Apple___Black_rot",
+    "Tomato___Early_blight",
+    "Tomato___Late_blight",
+    "Tomato___Leaf_Mold",
+    "Potato___Early_blight",
+    "Potato___Late_blight",
+    "Corn___Common_rust",
+    "healthy"
+]
 
-if os.path.exists(CLASS_NAMES_PATH):
-    with open(CLASS_NAMES_PATH, "r") as f:
-        class_names = json.load(f)
-    print(f"✓ {len(class_names)} classes loaded")
-else:
-    print(f"⚠️  Class names file not found at {CLASS_NAMES_PATH}")
-    class_names = {}
+model = None  # Will be loaded if model file exists
 
-# ───────────────────────────────────────────────────────
+def load_model():
+    """Load your actual TensorFlow model here when ready"""
+    global model
+    MODEL_PATH = "model/plant_model.h5"
+    if os.path.exists(MODEL_PATH):
+        try:
+            import tensorflow as tf
+            model = tf.keras.models.load_model(MODEL_PATH)
+            print("✓ TensorFlow model loaded")
+            return True
+        except Exception as e:
+            print(f"⚠️ Could not load TensorFlow model: {e}")
+            return False
+    return False
 
-# Disease treatment info — add more as needed
+# Try loading the model on startup
+load_model()
+
+# Disease treatment info
 TREATMENT_INFO = {
     "Apple___Apple_scab":         "Apply fungicide sprays. Remove and destroy infected leaves. Ensure good air circulation.",
     "Apple___Black_rot":          "Prune infected branches. Apply copper-based fungicide. Remove mummified fruits.",
@@ -52,14 +63,22 @@ def preprocess_image(image_bytes):
     try:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         img = img.resize((224, 224))
-        img_array = np.array(img, dtype=np.float32) / 255.0   # normalize to [0, 1]
-        img_array = np.expand_dims(img_array, axis=0)          # shape: (1, 224, 224, 3)
+        img_array = np.array(img, dtype=np.float32) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
         return img_array
     except Exception as e:
         raise ValueError(f"Image preprocessing failed: {str(e)}")
 
+def get_mock_prediction(image_array):
+    """Generate mock predictions for testing"""
+    # This is a placeholder - replace with actual model prediction
+    np.random.seed(42)
+    predictions = np.random.rand(len(DISEASE_CLASSES))
+    predictions = predictions / predictions.sum()  # normalize
+    return predictions
+
 def get_treatment(class_name):
-    """Look up treatment advice. Falls back to generic message."""
+    """Look up treatment advice."""
     for key in TREATMENT_INFO:
         if key.lower() in class_name.lower():
             return TREATMENT_INFO[key]
@@ -83,18 +102,13 @@ def health():
     return jsonify({
         "status": "running",
         "model_loaded": model is not None,
-        "classes_available": len(class_names)
+        "classes": len(DISEASE_CLASSES)
     }), 200
 
 @app.route("/predict", methods=["POST"])
 def predict():
     """Main prediction endpoint"""
     
-    # Check if model is loaded
-    if model is None:
-        return jsonify({"error": "Model not loaded. Please ensure plant_model.h5 is in the model folder."}), 500
-    
-    # Check image was sent
     if "image" not in request.files:
         return jsonify({"error": "No image file provided. Send image as form-data with key 'image'."}), 400
 
@@ -105,40 +119,44 @@ def predict():
 
     try:
         image_bytes = file.read()
-        img_tensor  = preprocess_image(image_bytes)
+        img_tensor = preprocess_image(image_bytes)
 
         # Run prediction
-        predictions = model.predict(img_tensor)[0]   # shape: (NUM_CLASSES,)
+        if model is not None:
+            predictions = model.predict(img_tensor)[0]
+        else:
+            # Use mock predictions if model not loaded
+            predictions = get_mock_prediction(img_tensor)
 
         # Top prediction
-        top_idx        = int(np.argmax(predictions))
-        top_class      = class_names[str(top_idx)]
+        top_idx = int(np.argmax(predictions))
+        top_class = DISEASE_CLASSES[top_idx]
         top_confidence = float(predictions[top_idx]) * 100
 
-        # Top 3 predictions for display
+        # Top 3 predictions
         top3_idx = np.argsort(predictions)[::-1][:3]
         top3 = [
             {
-                "class":      class_names[str(i)],
+                "class": DISEASE_CLASSES[i],
                 "confidence": round(float(predictions[i]) * 100, 2)
             }
             for i in top3_idx
         ]
 
-        # Clean up class name for display (e.g. "Tomato___Early_blight" → "Tomato — Early blight")
-        parts        = top_class.split("___")
-        plant_name   = parts[0].replace("_", " ")
+        # Parse class name
+        parts = top_class.split("___")
+        plant_name = parts[0].replace("_", " ")
         disease_name = parts[1].replace("_", " ") if len(parts) > 1 else "Unknown"
-        is_healthy   = "healthy" in top_class.lower()
+        is_healthy = "healthy" in top_class.lower()
 
         return jsonify({
-            "plant":      plant_name,
-            "disease":    disease_name,
+            "plant": plant_name,
+            "disease": disease_name,
             "is_healthy": is_healthy,
             "confidence": round(top_confidence, 2),
-            "treatment":  get_treatment(top_class),
-            "top3":       top3,
-            "raw_class":  top_class
+            "treatment": get_treatment(top_class),
+            "top3": top3,
+            "raw_class": top_class
         }), 200
 
     except Exception as e:
